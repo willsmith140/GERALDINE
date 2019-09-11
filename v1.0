@@ -1,0 +1,432 @@
+// Google Earth Engine Glacial Debris Identifier v1.0
+// Written by Will Smith - Newcastle University
+// w.d.smith2@newcastle.ac.uk
+
+Map.setOptions("hybrid", null, ["roadmap", "satellite", "hybrid", "terrain" ]);
+Map.setCenter(0,45,2);
+
+//Welcome menu
+var welcomePanel=ui.Panel({
+    style: {
+    position: 'top-center'
+    }
+  });
+  var welcomePanel1=ui.Panel({
+    style: {
+    position: 'bottom-center'
+    }
+  });
+var welcomeTitle=ui.Label({
+      value: 'Google Earth Engine Supraglacial Debris Detection',
+      style: {
+        margin: '1px 10px 1px 10px',
+        fontSize: '30px',
+        fontWeight: 'bold'
+        }
+    });
+var welcomeSubtitle=ui.Label({value:'Written by Will Smith, Newcastle University',
+      style: {
+        margin: '1px 10px 1px 10px',
+        textAlign: 'center',
+        fontSize: '14px'
+        }});
+var welcomeSubtitle1=ui.Label({value:'Contact: w.d.smith2@newcastle.ac.uk',
+      style: {
+        margin: '1px 10px 1px 10px',
+        textAlign: 'center',
+        fontSize: '14px'
+        }});
+
+var welcomeNewProject=ui.Button('New Project');
+welcomePanel.add(welcomeTitle);
+welcomePanel.add(welcomeSubtitle);
+welcomePanel.add(welcomeSubtitle1);
+welcomePanel.add(welcomeNewProject);
+Map.add(welcomePanel);
+//Map.add(welcomePanel1); // panel at the bottom to add citation
+
+welcomeNewProject.onClick(function() {
+  Map.remove(welcomePanel);
+  var polygon = [];
+  var geometry = null;
+  var featCol = ee.List([]);
+
+  Map.onClick(
+    function (coords) {
+        // Remove last polygon from map
+        for (var i = 0; i < Map.layers().length(); i++) {
+            var layer = Map.layers().get(i);
+            if ('Polygon' === layer.get('name')) {
+                Map.remove(layer);
+            }
+        }
+        
+        // Add coordinates to polygon
+        polygon.push([coords.lon, coords.lat]);
+        
+        // Manage the constructor type and build the geometry
+        if (polygon.length < 3) {
+            if (polygon.length == 1) {
+                geometry = ee.Geometry.Point(polygon[0]);
+            } else {
+                geometry = ee.Geometry.LineString(polygon);
+            }
+        } else {
+            geometry = ee.Geometry.Polygon([polygon]);
+        }
+        
+        // Create polygon layer
+        var polygonLayer = ui.Map.Layer({
+            'eeObject': ee.FeatureCollection(geometry).style({
+                color: 'ff0000',
+                fillColor: 'ff000000'
+            }),
+            'visParams': {},
+            'name': 'Polygon',
+            'shown': true,
+            'opacity': 1.0
+        });
+
+        // Add layer to map
+        return Map.layers().insert(Map.layers().length(), polygonLayer);
+    }
+  );
+
+  // Button to close/accept polygon
+  var roiButton = ui.Button({
+    label: 'OK',
+    onClick: function () {
+      if (roiPolygonBox.getValue()===undefined){
+        featCol = featCol.add(ee.Feature(ee.Geometry.Polygon([polygon])));
+        polygon = [];
+        for (var i = 0; i < Map.layers().length(); i++) {
+            var layer = Map.layers().get(i);
+            if ('feature collection' === layer.get('name')) {
+                Map.remove(layer);
+            }
+        }
+        
+        // Remove polygonLayer from map
+        Map.remove(Map.layers().get(0));
+        
+        // Define accepted polygon as featurecollection and add to map
+        var geometry = ee.FeatureCollection(featCol);
+        Map.addLayer(geometry, {color: 'blue'}, 'ROI');
+      }
+      
+      // Get and display user uploaded shapefile and use as ROI
+      else {
+        var geometry = ee.FeatureCollection(roiPolygonBox.getValue());
+        Map.addLayer(geometry, {color: 'blue'}, 'ROI');
+      }
+        
+        
+      Map.remove(roiPanel);
+      
+      // Date specification panels
+      var dateText = ui.Label({value: 'Choose date range for new debris additions',
+      style: {
+        fontSize: '16px',
+        fontWeight: 'bold'
+        }});
+      var dateText1 = ui.Label({value: 'Note: smaller date ranges produce better results',
+      style: {
+        fontSize: '14px',
+        }});
+      // text boxes for start/end dates
+      var startDateLabel=ui.Label('Start date in YYYY-MM-DD format:');
+      var startDateBox=ui.Textbox({
+        placeholder: '1984-01-01 (limit)',
+      });
+      var endDateLabel=ui.Label('End date in YYYY-MM-DD format:');
+      var endDateBox=ui.Textbox({
+        placeholder: new Date().toISOString().slice(0,10)
+      });
+        
+      var menu = ui.Panel({
+        style: {
+          position: 'top-center',
+          padding: '8px 15px'
+          }
+        });
+      //Add button to progress with rest of analysis
+      var dateButton=ui.Button('OK');
+      menu.add(dateText);
+      menu.add(dateText1);
+      menu.add(startDateLabel);
+      menu.add(startDateBox);
+      menu.add(endDateLabel);
+      menu.add(endDateBox);
+      menu.add(dateButton);
+      Map.add(menu);
+        
+        dateButton.onClick(function(){
+          Map.remove(menu);
+          Map.setOptions("terrain", null, ["roadmap", "satellite", "hybrid", "terrain" ]);
+          Map.layers().get(0).setShown(false);
+          var startDate=startDateBox.getValue();
+          var endDate=endDateBox.getValue();
+        
+        /////////////////////////////////         FUNCTIONS / METHOD        \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+        
+        // Get all Landsat images from specified date range
+        var getCollection = function(startDate, endDate, geometry){
+
+        var L4 = ee.ImageCollection('LANDSAT/LT04/C01/T1_TOA')
+         .filterDate(startDate, endDate).sort("system:time_start")
+         .filterBounds(geometry)
+         .filter(ee.Filter.lt("WRS_ROW", 220)); // Exclude all ascending node images (images occasionally collected during night)
+
+        var L5 = ee.ImageCollection('LANDSAT/LT05/C01/T1_TOA')
+         .filterDate(startDate, endDate).sort("system:time_start")
+         .filterBounds(geometry)
+         .filter(ee.Filter.lt("WRS_ROW", 220));
+
+        var L7 = ee.ImageCollection('LANDSAT/LE07/C01/T1_TOA')
+         .filterDate(startDate, endDate).sort("system:time_start")
+         .filterBounds(geometry)
+         .filter(ee.Filter.lt("WRS_ROW", 220));
+  
+        var L8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA')
+         .filterDate(startDate, endDate).sort("system:time_start")
+         .filterBounds(geometry)
+         .filter(ee.Filter.lt("WRS_ROW", 220));
+    
+        return L4.merge(L5).merge(L7).merge(L8);
+        };
+        
+        // Get images from user specified date range
+        var collection = getCollection(startDate, endDate, geometry);
+        // Centre roi in viewer
+        Map.centerObject(geometry, 9);
+
+        print("Images used to identify new debris additions", collection);
+        
+        ////////////////////////////                  MASKS                       \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+        // RGI clip
+        var clip = (function(image) { 
+          return image.clip(ee.FeatureCollection("users/willsmith140/rgi60_all")); 
+        });
+        
+        // Cloud mask
+        var cloudMask = (function(image){
+          // Calculates simple cloud score on image
+          var cloud = ee.Algorithms.Landsat.simpleCloudScore(image);
+          // Create a mask from the cloud score, which highlights all pixels with cloud confidence >80%
+          var cloud_20 = cloud.select(['cloud']).lte(20);
+          // Masks original image with clouds (i.e. removes all identified cloud from image)
+          return image.updateMask(cloud_20);
+        });
+        
+        // Add NDWI mask to collection
+        var ndwiMask = (function(image) {
+        // Apply NDWI to image
+          var ndwi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
+                          image.normalizedDifference(['B5', 'B3']).rename('NDWI'), 
+                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_7")),
+                          image.normalizedDifference(['B4', 'B2']).rename('NDWI'),
+                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_5")),
+                          image.normalizedDifference(['B4', 'B2']).rename('NDWI'),
+                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_4")),
+                          image.normalizedDifference(['B4', 'B2']).rename('NDWI'),
+                          null)))));
+
+        // Select all pixels >0.4 
+        var waterPixels = ndwi.select('NDWI').gte(-0.4);
+        // Masks original image with water (i.e. removes all identified water from image)
+        return image.updateMask(waterPixels);
+        });
+
+        // Add NDSI to collection to delineate snow/ice from supraglacial debris
+        var addNDSI = (function(image) {
+          // Calculates NDSI on Landsat image
+          var ndsi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
+                          image.normalizedDifference(['B3', 'B6']).rename('NDSI'), 
+                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_7")),
+                          image.normalizedDifference(['B2', 'B5']).rename('NDSI'),
+                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_5")),
+                          image.normalizedDifference(['B2', 'B5']).rename('NDSI'),
+                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_4")),
+                          image.normalizedDifference(['B2', 'B5']).rename('NDSI'),
+                          null)))));
+                          
+          // Selects all snow pixels and assigns them value of 1 for binary mask
+          var snowPixels = ndsi.select('NDSI').gte(0.4).rename('Snow');
+          // Adds NDSI band and snow pixel yes/no (1/0) band
+          return image.addBands(ndsi).addBands(snowPixels);
+        });
+
+/////////////////////////////////////              MASK FUNCTION                \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+        // Create function which will apply all masks and NDSI to single image
+        var masked = (function(image){
+          // Clip images in collection to RGI outlines
+        var clipped = clip(image);
+          // Apply cloud mask to image
+        var cloud = cloudMask(clipped);
+        // Apply NDWI mask to cloud masked image
+        var water = ndwiMask(cloud);
+        // Perform NDSI on masked image
+        var snow = addNDSI(water);
+        return snow;
+        });
+
+/////////////////////////////////////       Debris extent identification        ////////////////////////////////
+
+        // Function which takes user input date and gets entire previous year date range
+        var debrisExtentDates = function(startDate){
+          // Gets full year date range from start date
+          var range = ee.Date(startDate).getRange('year');
+          // Converts start of range to UNIX time
+          var currentYear = range.start().millis();
+          // Calculates year before start date and creates full year date range from this date
+          var previousYear = ee.Date(currentYear.subtract(31536000000)).getRange('year');
+          return previousYear;
+        };
+
+        // Apply function to user supplied start date
+        var debrisDates = debrisExtentDates(startDate);
+
+        // Load Landsat 8 data, filter by date and bounds for previous year debris cover extent
+        var debrisCollection = getCollection(debrisDates.start(), debrisDates.end(), geometry);
+        print("Images used to determine previous year max debris coverage", debrisCollection.getInfo());
+
+        // Mask debrisCollection and get maximum debris extent (debris represented as 0 in binary raster)
+        var debrisExtent = debrisCollection.map(masked).select('Snow').min();
+        // Clip debrisExtent to ROI
+        var debrisExtent_clip = debrisExtent.clip(geometry);
+
+        // Add maximum debris and snow extent layers
+        Map.addLayer(debrisExtent_clip, {}, "Previous year max debris coverage");
+
+        /* Mask collection (acquired from user specified date range), get max debris extent and subtract from previous year
+        max debris extent to determine debris additions onto clean snow/ice */
+        var newDebris = debrisExtent.subtract(collection.map(masked).select('Snow').min()).selfMask().clip(geometry);
+        Map.addLayer(newDebris, {palette: ['red']}, "New debris additions");
+
+///////////////////////////////////////           EXPORT FUNCTION           //////////////////////////////////////
+        // Exports ROI to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
+        Export.table.toDrive({
+          collection: geometry,
+          description: 'ROI',
+          fileFormat: 'GeoJSON',
+          folder: 'EarthEngine'
+        });
+        
+        // newDebris raster to vector conversion
+        var newDebris_export = newDebris.reduceToVectors({
+          geometry: geometry,
+          scale: 30,
+          geometryType: 'polygon',
+          maxPixels: 1e15,
+          bestEffort: true,
+          tileScale: 8
+        });
+
+        // Exports new debris to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
+        Export.table.toDrive({
+          collection: newDebris_export,
+          description: ['newDebris']+['_']+startDate+['-']+endDate,
+          fileFormat: 'GeoJSON',
+          folder: 'EarthEngine'
+        });
+
+        // newDebris raster to vector conversion
+        var debrisExtent_export = debrisExtent_clip.reduceToVectors({
+          geometry: geometry,
+          scale: 30,
+          geometryType: 'polygon',
+          maxPixels: 1e15,
+          bestEffort: true,
+          tileScale: 8
+        });
+
+        // Exports new debris to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
+        Export.table.toDrive({
+          collection: debrisExtent_export,
+          description: ['debrisExtent']+['_']+startDate+['-']+endDate,
+          fileFormat: 'GeoJSON',
+          folder: 'EarthEngine'
+        });
+        
+        // Export button
+        var exportButton = ui.Button('Export data');
+        Map.add(exportButton);
+        
+        // Display warning and instructions on how to export data to Google Drive
+        exportButton.onClick(function(){
+        Map.remove(exportButton);
+        var exportDataPanel=ui.Panel({
+          style: {
+          position: 'top-center'}
+          });
+        var exportLabel=ui.Label({value: 'IMPORTANT: TO EXPORT YOUR DATA EXECUTE THE FOLLOWING PROCESS',
+        style: {
+          fontSize: '16px',
+          fontWeight: 'bold'
+          }});
+        var exportLabel1=ui.Label('1) Navigate to the Tasks tab in the top right hand panel - both newDebris and previous year debrisExtent will be available to download');
+        var exportLabel2=ui.Label('2) Click run to download them - you will be given the option to rename the file and choose a save location on your Google Drive');
+        var okButton=ui.Button('OK');
+        exportDataPanel.add(exportLabel);
+        exportDataPanel.add(exportLabel1);
+        exportDataPanel.add(exportLabel2);
+        exportDataPanel.add(okButton);
+        Map.add(exportDataPanel);
+        
+
+        okButton.onClick(function(){
+        Map.remove(exportDataPanel);
+        });
+        });
+        
+        
+        });
+    }
+});
+
+// ROI labels
+var roiLabel1 = ui.Label({value: 'Define region of interest (ROI)',
+  style: {
+  fontSize: '16px',
+  fontWeight: 'bold'
+}});
+var roiLabel2 = ui.Label('Step 1: Click to draw polygon around ROI on map');
+var roiLabel3 = ui.Label('Step 2: Press OK to confirm ROI');
+var roiLabel4 = ui.Label({value: 'Alternatively upload shapefile of ROI:',
+        style: {
+          fontSize: '14px',
+          fontWeight: 'bold'
+          }});
+var roiLabel5 = ui.Label('Step 1: Navigate to assets tab in top left panel');
+var roiLabel6 = ui.Label('Step 2: Click NEW -> Table Upload -> Select files to upload');
+var roiLabel7 = ui.Label('Step 3: Specify shapefile file path in box below');
+var roiPolygonBox=ui.Textbox({
+      placeholder: 'e.g. users/joebloggs12/KluaneNP_boundary',
+      style: {
+        width: '358px'
+      }
+    });
+var roiLabel8 = ui.Label('Click here for more information on importing shapefiles').setUrl('https://developers.google.com/earth-engine/importing');
+
+var roiPanel = ui.Panel({
+    style: {
+    position: 'top-center'
+    }
+  });
+
+roiPanel.add(roiLabel1);
+roiPanel.add(roiLabel2);
+roiPanel.add(roiLabel3);
+roiPanel.add(roiLabel4);
+roiPanel.add(roiLabel5);
+roiPanel.add(roiLabel6);
+roiPanel.add(roiLabel7);
+roiPanel.add(roiPolygonBox);
+roiPanel.add(roiLabel8);
+roiPanel.add(roiButton);
+
+Map.add(roiPanel);
+Map.style().set('cursor', 'crosshair');
+  });
+  
