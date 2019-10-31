@@ -4,4 +4,4 @@ As glacial environments deglaciate, debris supply rates increase, expanding supr
 
 Latest tool link (v1.0): https://code.earthengine.google.com/0c5eacc1b5a20a5d5467008ed4f88d87
 
-Citation: Smith, W.D., Dunning, S.A., Ross, N., Telling, J. and Brough, S. (In Review) 'GERALDINE (Google earth Engine supRaglAciaL Debris INput dEtector) - A new Tool for Identifying and Monitoring Supraglacial Debris Inputs', Remote Sensing of Environment, doi:
+Citation: Smith, W.D., Dunning, S.A., Ross, N., Telling, J. and Brough, S. (In Review) 'GERALDINE (Google earth Engine supRaglAciaL Debris INput dEtector) - A new Tool for Identifying and Monitoring Supraglacial Debris Inputs', Remote Sensing of Environment
