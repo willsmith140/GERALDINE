@@ -1,4 +1,4 @@
-// Google Earth Engine Glacial Debris Identifier v1.0
+// GERALDINE (Google earth Engine supRaglAciaL Debris INput dEtector) v1.0
 // Written by Will Smith - Newcastle University
 // w.d.smith2@newcastle.ac.uk
 
@@ -17,33 +17,40 @@ var welcomePanel=ui.Panel({
     }
   });
 var welcomeTitle=ui.Label({
-      value: 'Google Earth Engine Supraglacial Debris Detection',
+      value: 'GERALDINE (Google earth Engine supRaglAciaL Debris INput dEtector)',
       style: {
         margin: '1px 10px 1px 10px',
-        fontSize: '30px',
+        fontSize: '24px',
         fontWeight: 'bold'
         }
     });
-var welcomeSubtitle=ui.Label({value:'Written by Will Smith, Newcastle University',
+var welcomeSubtitle=ui.Label({value:'Written by Will Smith, Newcastle University (w.d.smith2@newcastle.ac.uk)',
       style: {
         margin: '1px 10px 1px 10px',
         textAlign: 'center',
         fontSize: '14px'
         }});
-var welcomeSubtitle1=ui.Label({value:'Contact: w.d.smith2@newcastle.ac.uk',
+var welcomeSubtitle1=ui.Label({value:'Version: 1.0',
       style: {
         margin: '1px 10px 1px 10px',
         textAlign: 'center',
-        fontSize: '14px'
+        fontSize: '14px',
         }});
+var welcomeSubtitle2=ui.Label({value:'If used please cite: Smith et al. (2019) GERALDINE: A new Tool for Identifying and Monitoring Supraglacial Debris Inputs',
+      style: {
+        margin: '1px 10px 1px 10px',
+        textAlign: 'center',
+        fontSize: '12px',
+        fontWeight: 'bold'
+        }}).setUrl('https://www.earth-surf-dynam.net/');
 
 var welcomeNewProject=ui.Button('New Project');
 welcomePanel.add(welcomeTitle);
 welcomePanel.add(welcomeSubtitle);
 welcomePanel.add(welcomeSubtitle1);
+welcomePanel.add(welcomeSubtitle2);
 welcomePanel.add(welcomeNewProject);
 Map.add(welcomePanel);
-//Map.add(welcomePanel1); // panel at the bottom to add citation
 
 welcomeNewProject.onClick(function() {
   Map.remove(welcomePanel);
@@ -124,12 +131,12 @@ welcomeNewProject.onClick(function() {
       Map.remove(roiPanel);
       
       // Date specification panels
-      var dateText = ui.Label({value: 'Choose date range for new debris additions',
+      var dateText = ui.Label({value: 'Define date range of interest',
       style: {
         fontSize: '16px',
         fontWeight: 'bold'
         }});
-      var dateText1 = ui.Label({value: 'Note: smaller date ranges produce better results',
+      var dateText1 = ui.Label({value: 'Note: Annual date ranges produce best results',
       style: {
         fontSize: '14px',
         }});
@@ -223,17 +230,17 @@ welcomeNewProject.onClick(function() {
         var ndwiMask = (function(image) {
         // Apply NDWI to image
           var ndwi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
-                          image.normalizedDifference(['B5', 'B3']).rename('NDWI'), 
+                          image.normalizedDifference(['B3', 'B5']).rename('NDWI'), 
                           ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_7")),
-                          image.normalizedDifference(['B4', 'B2']).rename('NDWI'),
+                          image.normalizedDifference(['B2', 'B4']).rename('NDWI'),
                           ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_5")),
-                          image.normalizedDifference(['B4', 'B2']).rename('NDWI'),
+                          image.normalizedDifference(['B2', 'B4']).rename('NDWI'),
                           ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_4")),
-                          image.normalizedDifference(['B4', 'B2']).rename('NDWI'),
+                          image.normalizedDifference(['B2', 'B4']).rename('NDWI'),
                           null)))));
 
         // Select all pixels >0.4 
-        var waterPixels = ndwi.select('NDWI').gte(-0.4);
+        var waterPixels = ndwi.select('NDWI').lte(0.4);
         // Masks original image with water (i.e. removes all identified water from image)
         return image.updateMask(waterPixels);
         });
@@ -260,17 +267,17 @@ welcomeNewProject.onClick(function() {
 /////////////////////////////////////              MASK FUNCTION                \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         // Create function which will apply all masks and NDSI to single image
         var masked = (function(image){
-          // Clip images in collection to RGI outlines
+        // Clip images in collection to RGI outlines
         var clipped = clip(image);
-          // Apply cloud mask to image
+        // Apply cloud mask to image
         var cloud = cloudMask(clipped);
-        // Apply NDWI mask to cloud masked image
-        var water = ndwiMask(cloud);
+        // Apply NDWI mask
+        var water = ndwiMask(cloud)
         // Perform NDSI on masked image
         var snow = addNDSI(water);
         return snow;
         });
-
+        
 /////////////////////////////////////       Debris extent identification        ////////////////////////////////
 
         // Function which takes user input date and gets entire previous year date range
@@ -429,4 +436,3 @@ roiPanel.add(roiButton);
 Map.add(roiPanel);
 Map.style().set('cursor', 'crosshair');
   });
-  
