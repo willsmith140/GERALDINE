@@ -133,23 +133,59 @@ welcomeNewProject.onClick(function() {
       // Date specification panels
       var dateText = ui.Label({value: 'Define date range of interest',
       style: {
+        margin: '10px 10px 0px 7px',
         fontSize: '16px',
         fontWeight: 'bold'
         }});
       var dateText1 = ui.Label({value: 'Note: Annual date ranges produce best results',
       style: {
+        margin: '5px 10px 5px 7px',
         fontSize: '14px',
         }});
       // text boxes for start/end dates
-      var startDateLabel=ui.Label('Start date in YYYY-MM-DD format:');
+      var startDateLabel=ui.Label({value: 'Start date in YYYY-MM-DD format:',
+      style: {
+        margin: '10px 10px 0px 7px',
+      }});
       var startDateBox=ui.Textbox({
         placeholder: '1984-01-01 (limit)',
       });
-      var endDateLabel=ui.Label('End date in YYYY-MM-DD format:');
+      var endDateLabel=ui.Label({value: 'End date in YYYY-MM-DD format:',
+      style: {
+        margin: '10px 10px 0px 7px',
+      }});
       var endDateBox=ui.Textbox({
         placeholder: new Date().toISOString().slice(0,10)
       });
+      
+      var landsatText1 = ui.Label({value: 'Landsat imagery tier selection (Tier 1 used by default)',
+      style: {
+        margin: '20px 10px 5px 7px',
+        fontSize: '16px',
+        fontWeight: 'bold'
+        }});
+      var landsatText2 = ui.Label({value: 'Click here for more information on Landsat imagery tiers',
+      style: {
+        margin: '0px 10px 5px 7px',
+        fontSize: '14px',
+        }}).setUrl('https://www.usgs.gov/media/videos/landsat-collections-what-are-tiers');
         
+      var T2check=ui.Checkbox('Include Landsat Tier 2 imagery',false);
+      var T2check_note = ui.Label({value: 'Note: Tier 2 imagery should only be used where Tier 1 imagery is limited i.e. Antarctica',
+      style: {
+        margin: '0px 10px 0px 8px',
+        fontSize: '10px',
+        color: 'red'
+        }});
+        
+      var RTcheck=ui.Checkbox('Include Landsat Real Time  imagery',false);
+      var RTcheck_note = ui.Label({value: 'Note: Real Time imagery only available for past 16 days and todays date must be input as end date',
+      style: {
+        margin: '0px 10px 20px 8px',
+        fontSize: '10px',
+        color: 'red'
+        }});
+ 
       var menu = ui.Panel({
         style: {
           position: 'top-center',
@@ -164,6 +200,12 @@ welcomeNewProject.onClick(function() {
       menu.add(startDateBox);
       menu.add(endDateLabel);
       menu.add(endDateBox);
+      menu.add(landsatText1);
+      menu.add(landsatText2);
+      menu.add(T2check);
+      menu.add(T2check_note);
+      menu.add(RTcheck);
+      menu.add(RTcheck_note);
       menu.add(dateButton);
       Map.add(menu);
         
@@ -173,63 +215,206 @@ welcomeNewProject.onClick(function() {
           Map.layers().get(0).setShown(false);
           var startDate=startDateBox.getValue();
           var endDate=endDateBox.getValue();
+          
         
         /////////////////////////////////         FUNCTIONS / METHOD        \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         
-        // Get all Landsat images from specified date range
-        var getCollection = function(startDate, endDate, geometry){
+        // Function to get all tier 2 Landsat images
+        var T2_collection = function(startDate, endDate, geometry){
+          
+              var L4_T2 = ee.ImageCollection('LANDSAT/LT04/C01/T2_TOA')
+                .filterDate(startDate, endDate).sort("system:time_start")
+                .filterBounds(geometry)
+                .filter(ee.Filter.lt("WRS_ROW", 220)); // Exclude all ascending node images (images occasionally collected during night)
 
-        var L4 = ee.ImageCollection('LANDSAT/LT04/C01/T1_TOA')
-         .filterDate(startDate, endDate).sort("system:time_start")
-         .filterBounds(geometry)
-         .filter(ee.Filter.lt("WRS_ROW", 220)); // Exclude all ascending node images (images occasionally collected during night)
+              var L5_T2 = ee.ImageCollection('LANDSAT/LT05/C01/T2_TOA')
+                .filterDate(startDate, endDate).sort("system:time_start")
+                .filterBounds(geometry)
+                .filter(ee.Filter.lt("WRS_ROW", 220));
 
-        var L5 = ee.ImageCollection('LANDSAT/LT05/C01/T1_TOA')
-         .filterDate(startDate, endDate).sort("system:time_start")
-         .filterBounds(geometry)
-         .filter(ee.Filter.lt("WRS_ROW", 220));
-
-        var L7 = ee.ImageCollection('LANDSAT/LE07/C01/T1_TOA')
-         .filterDate(startDate, endDate).sort("system:time_start")
-         .filterBounds(geometry)
-         .filter(ee.Filter.lt("WRS_ROW", 220));
+              var L7_T2 = ee.ImageCollection('LANDSAT/LE07/C01/T2_TOA')
+                .filterDate(startDate, endDate).sort("system:time_start")
+                .filterBounds(geometry)
+                .filter(ee.Filter.lt("WRS_ROW", 220));
   
-        var L8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA')
-         .filterDate(startDate, endDate).sort("system:time_start")
-         .filterBounds(geometry)
-         .filter(ee.Filter.lt("WRS_ROW", 220));
-    
-        return L4.merge(L5).merge(L7).merge(L8);
+              var L8_T2 = ee.ImageCollection('LANDSAT/LC08/C01/T2_TOA')
+                .filterDate(startDate, endDate).sort("system:time_start")
+                .filterBounds(geometry)
+                .filter(ee.Filter.lt("WRS_ROW", 220));
+                
+              return L4_T2.merge(L5_T2).merge(L7_T2).merge(L8_T2);
         };
         
-        // Get images from user specified date range
-        var collection = getCollection(startDate, endDate, geometry);
-        // Centre roi in viewer
-        Map.centerObject(geometry, 9);
+        // Function to all all real time Landsat images from last 16 days
+        var RT_collection = function(endDate, geometry){
+              // Get current date
+              var currentDate = new Date().toISOString().slice(0,10);
+              
+              // Check user has entered current date as end date
+              if(endDate===currentDate){
+              // Subtract 26 or 16 days from end date - Landsat 7 real time images take 26 days to process, Landsat 8 images take 16 days to process before they are incorporated into tiers 1 or 2
+              var startDate_RT_L7 = ee.Date(endDate).millis().subtract(2246400000);
+              var startDate_RT_L8 = ee.Date(endDate).millis().subtract(1382400000);
 
-        print("Images used to identify new debris additions", collection);
-        
-        ////////////////////////////                  MASKS                       \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+              // Get Landsat 7 real time images
+              var L7_RT = ee.ImageCollection('LANDSAT/LE07/C01/T1_RT_TOA')
+                .filterDate(startDate_RT_L7, endDate).sort("system:time_start")
+                .filterBounds(geometry)
+                .filter(ee.Filter.lt("WRS_ROW", 220));
 
-        // RGI clip
-        var clip = (function(image) { 
-          return image.clip(ee.FeatureCollection("users/willsmith140/rgi60_all")); 
-        });
+              // Get Landsat 8 real time images
+              var L8_RT = ee.ImageCollection('LANDSAT/LC08/C01/T1_RT_TOA')
+                .filterDate(startDate_RT_L8, endDate).sort("system:time_start")
+                .filterBounds(geometry)
+                .filter(ee.Filter.lt("WRS_ROW", 220));
+                
+              return L7_RT.merge(L8_RT);
+            }
+            
+            else{
+                return print('Real time images only available from the previous 16 days - end date must be set as todays date');
+              }
+        };
         
-        // Cloud mask
-        var cloudMask = (function(image){
-          // Calculates simple cloud score on image
-          var cloud = ee.Algorithms.Landsat.simpleCloudScore(image);
-          // Create a mask from the cloud score, which highlights all pixels with cloud confidence >80%
-          var cloud_20 = cloud.select(['cloud']).lte(20);
-          // Masks original image with clouds (i.e. removes all identified cloud from image)
-          return image.updateMask(cloud_20);
-        });
         
-        // Add NDWI mask to collection
-        var ndwiMask = (function(image) {
-        // Apply NDWI to image
-          var ndwi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
+        
+        // Get all Landsat tier 1 images from specified date range
+          var getNewDebrisCollection = function(startDate, endDate, geometry){
+            
+
+            var L4 = ee.ImageCollection('LANDSAT/LT04/C01/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220)); // Exclude all ascending node images (images occasionally collected during night)
+
+            var L5 = ee.ImageCollection('LANDSAT/LT05/C01/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220));
+
+            var L7 = ee.ImageCollection('LANDSAT/LE07/C01/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220));
+  
+            var L8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220));
+              
+              
+            if(T2check.getValue() === true && RTcheck.getValue() === false){
+              
+              // Get all Landsat tier 2 images from specified date range
+              var T2_images = T2_collection(startDate, endDate, geometry);
+                
+              return L4.merge(L5).merge(L7).merge(L8).merge(T2_images);
+              
+            }
+            
+            if(T2check.getValue() === false && RTcheck.getValue() === true && endDate === new Date().toISOString().slice(0,10)){
+              
+              // Get all Landsat real time images from the previous 16 days if user has specified end date as todays date
+              var RT_images = RT_collection(endDate, geometry);
+              
+              return L4.merge(L5).merge(L7).merge(L8).merge(RT_images);
+            }
+            
+            // Check if user has entered todays date as end date - if they haven't then real time images are not utilised and warning shows
+            if(T2check.getValue() === false && RTcheck.getValue() === true && endDate !== new Date().toISOString().slice(0,10)){
+              
+              print('Real time images only available from the previous 16 days - end date must be set as todays date');
+              
+              var RTwarning = ui.Panel({
+                style: {
+                position: 'bottom-center',
+                padding: '8px 15px'
+              }});
+              var RTwarning_text = ui.Label({value: 'Landsat Real Time images are not being utilised because end date must be set as todays date',
+                style: {
+                fontSize: '30px',
+                fontWeight: 'bold',
+                color: 'red',
+                textAlign: 'center'
+              }});
+              
+              RTwarning.add(RTwarning_text);
+              
+              Map.add(RTwarning);
+              
+              return L4.merge(L5).merge(L7).merge(L8);
+            }
+            
+            // Check if user has entered todays date as end date - if they haven't then real time images are not utilised and warning shows
+            if(T2check.getValue() === true && RTcheck.getValue() === true && endDate !== new Date().toISOString().slice(0,10)){
+              
+              print('Real time images only available from the previous 16 days - end date must be set as todays date');
+              
+              var RTwarning = ui.Panel({
+                style: {
+                position: 'bottom-center',
+                padding: '8px 15px'
+              }});
+              var RTwarning_text = ui.Label({value: 'Landsat Real Time images are not being utilised because end date must be set as todays date',
+                style: {
+                fontSize: '30px',
+                fontWeight: 'bold',
+                color: 'red',
+                textAlign: 'center'
+              }});
+              
+              RTwarning.add(RTwarning_text);
+              
+              Map.add(RTwarning);
+              
+              var T2_images = T2_collection(startDate, endDate, geometry);
+              
+              return L4.merge(L5).merge(L7).merge(L8).merge(T2_images);
+            }
+
+            
+            if(T2check.getValue() && RTcheck.getValue() === true){
+              var T2_images = T2_collection(startDate, endDate, geometry);
+              var RT_images = RT_collection(endDate, geometry);
+              
+              return L4.merge(L5).merge(L7).merge(L8).merge(T2_images).merge(RT_images);
+            }
+            
+            else{
+              return L4.merge(L5).merge(L7).merge(L8);
+            }
+
+          };
+        
+          // Get images from user specified date range
+          var collection = getNewDebrisCollection(startDate, endDate, geometry);
+        
+          // Centre roi in viewer
+          Map.centerObject(geometry, 9);
+
+          print("Images used to identify new debris additions", collection);
+        
+          ////////////////////////////                  MASKS                       \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+          // RGI clip
+          var clip = (function(image) { 
+            return image.clip(ee.FeatureCollection("users/willsmith140/rgi60_all")); 
+          });
+        
+          // Cloud mask
+          var cloudMask = (function(image){
+            // Calculates simple cloud score on image
+            var cloud = ee.Algorithms.Landsat.simpleCloudScore(image);
+            // Create a mask from the cloud score, which highlights all pixels with cloud confidence >80%
+            var cloud_20 = cloud.select(['cloud']).lte(20);
+           // Masks original image with clouds (i.e. removes all identified cloud from image)
+            return image.updateMask(cloud_20);
+          });
+        
+          // Add NDWI mask to collection
+          var ndwiMask = (function(image) {
+            // Apply NDWI to image
+            var ndwi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
                           image.normalizedDifference(['B3', 'B5']).rename('NDWI'), 
                           ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_7")),
                           image.normalizedDifference(['B2', 'B4']).rename('NDWI'),
@@ -239,16 +424,16 @@ welcomeNewProject.onClick(function() {
                           image.normalizedDifference(['B2', 'B4']).rename('NDWI'),
                           null)))));
 
-        // Select all pixels >0.4 
-        var waterPixels = ndwi.select('NDWI').lte(0.4);
-        // Masks original image with water (i.e. removes all identified water from image)
-        return image.updateMask(waterPixels);
-        });
+            // Select all pixels >0.4 
+            var waterPixels = ndwi.select('NDWI').lte(0.4);
+            // Masks original image with water (i.e. removes all identified water from image)
+            return image.updateMask(waterPixels);
+          });
 
-        // Add NDSI to collection to delineate snow/ice from supraglacial debris
-        var addNDSI = (function(image) {
-          // Calculates NDSI on Landsat image
-          var ndsi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
+          // Add NDSI to collection to delineate snow/ice from supraglacial debris
+          var addNDSI = (function(image) {
+            // Calculates NDSI on Landsat image
+            var ndsi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
                           image.normalizedDifference(['B3', 'B6']).rename('NDSI'), 
                           ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_7")),
                           image.normalizedDifference(['B2', 'B5']).rename('NDSI'),
@@ -258,27 +443,68 @@ welcomeNewProject.onClick(function() {
                           image.normalizedDifference(['B2', 'B5']).rename('NDSI'),
                           null)))));
                           
-          // Selects all snow pixels and assigns them value of 1 for binary mask
-          var snowPixels = ndsi.select('NDSI').gte(0.4).rename('Snow');
-          // Adds NDSI band and snow pixel yes/no (1/0) band
-          return image.addBands(ndsi).addBands(snowPixels);
-        });
+            // Selects all snow pixels and assigns them value of 1 for binary mask
+            var snowPixels = ndsi.select('NDSI').gte(0.4).rename('Snow');
+            // Adds NDSI band and snow pixel yes/no (1/0) band
+            return image.addBands(ndsi).addBands(snowPixels);
+          });
 
 /////////////////////////////////////              MASK FUNCTION                \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-        // Create function which will apply all masks and NDSI to single image
-        var masked = (function(image){
-        // Clip images in collection to RGI outlines
-        var clipped = clip(image);
-        // Apply cloud mask to image
-        var cloud = cloudMask(clipped);
-        // Apply NDWI mask
-        var water = ndwiMask(cloud)
-        // Perform NDSI on masked image
-        var snow = addNDSI(water);
-        return snow;
-        });
+          // Create function which will apply all masks and NDSI to single image
+          var masked = (function(image){
+            // Clip images in collection to RGI outlines
+            var clipped = clip(image);
+            // Apply cloud mask to image
+            var cloud = cloudMask(clipped);
+            // Apply NDWI mask
+            var water = ndwiMask(cloud);
+            // Perform NDSI on masked image
+            var snow = addNDSI(water);
+          return snow;
+          });
         
 /////////////////////////////////////       Debris extent identification        ////////////////////////////////
+
+          // Get all Landsat images from year before user specified date range
+          var getDebrisExtentCollection = function(startDate, endDate, geometry){
+            
+            // Get tier 1 Landsat imagery by default
+            var L4 = ee.ImageCollection('LANDSAT/LT04/C01/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220)); // Exclude all ascending node images (images occasionally collected during night)
+
+            var L5 = ee.ImageCollection('LANDSAT/LT05/C01/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220));
+
+            var L7 = ee.ImageCollection('LANDSAT/LE07/C01/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220));
+  
+            var L8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220));
+              
+              
+            if(T2check.getValue() === true){
+              
+              // Get all Landsat tier 2 images from year before user specified date range
+              var T2_images = T2_collection(startDate, endDate, geometry);
+                
+              return L4.merge(L5).merge(L7).merge(L8).merge(T2_images);
+              
+            }
+            
+            // Only return Tier 1 images if Tier 2 imagery box has not been checked
+            else{
+              return L4.merge(L5).merge(L7).merge(L8);
+            }
+
+          };
 
         // Function which takes user input date and gets entire previous year date range
         var debrisExtentDates = function(startDate){
@@ -295,7 +521,7 @@ welcomeNewProject.onClick(function() {
         var debrisDates = debrisExtentDates(startDate);
 
         // Load Landsat 8 data, filter by date and bounds for previous year debris cover extent
-        var debrisCollection = getCollection(debrisDates.start(), debrisDates.end(), geometry);
+        var debrisCollection = getDebrisExtentCollection(debrisDates.start(), debrisDates.end(), geometry);
         print("Images used to determine previous year max debris coverage", debrisCollection.getInfo());
 
         // Mask debrisCollection and get maximum debris extent (debris represented as 0 in binary raster)
