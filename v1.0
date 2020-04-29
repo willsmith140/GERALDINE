@@ -129,6 +129,8 @@ welcomeNewProject.onClick(function() {
         
         
       Map.remove(roiPanel);
+      Map.unlisten();
+      Map.style().set('cursor', 'hand');
       
       // Date specification panels
       var dateText = ui.Label({value: 'Define date range of interest',
