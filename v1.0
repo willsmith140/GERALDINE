@@ -568,80 +568,81 @@ welcomeNewProject.onClick(function() {
         Map.addLayer(newDebris, {palette: ['red']}, "New debris additions");
 
 ///////////////////////////////////////           EXPORT FUNCTION           //////////////////////////////////////
-        // Exports ROI to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
-        Export.table.toDrive({
-          collection: geometry,
-          description: 'ROI',
-          fileFormat: 'GeoJSON',
-          folder: 'EarthEngine'
-        });
-        
-        // newDebris raster to vector conversion
-        var newDebris_export = newDebris.reduceToVectors({
-          geometry: geometry,
-          scale: 30,
-          geometryType: 'polygon',
-          maxPixels: 1e15,
-          bestEffort: true,
-          tileScale: 8
-        });
 
-        // Exports new debris to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
-        Export.table.toDrive({
-          collection: newDebris_export,
-          description: ['newDebris']+['_']+startDate+['-']+endDate,
-          fileFormat: 'GeoJSON',
-          folder: 'EarthEngine'
-        });
-
-        // newDebris raster to vector conversion
-        var debrisExtent_export = debrisExtent.reduceToVectors({
-          geometry: geometry,
-          scale: 30,
-          geometryType: 'polygon',
-          maxPixels: 1e15,
-          bestEffort: true,
-          tileScale: 8
-        });
-
-        // Exports new debris to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
-        Export.table.toDrive({
-          collection: debrisExtent_export,
-          description: ['debrisExtent']+['_']+startDate+['-']+endDate,
-          fileFormat: 'GeoJSON',
-          folder: 'EarthEngine'
-        });
-        
         // Export button
         var exportButton = ui.Button('Export data');
         Map.add(exportButton);
         
         // Display warning and instructions on how to export data to Google Drive
         exportButton.onClick(function(){
-        Map.remove(exportButton);
-        var exportDataPanel=ui.Panel({
-          style: {
-          position: 'top-center'}
+          // Exports ROI to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
+          Export.table.toDrive({
+            collection: geometry,
+            description: 'ROI',
+            fileFormat: 'GeoJSON',
+            folder: 'EarthEngine'
           });
-        var exportLabel=ui.Label({value: 'IMPORTANT: TO EXPORT YOUR DATA EXECUTE THE FOLLOWING PROCESS',
-        style: {
-          fontSize: '16px',
-          fontWeight: 'bold'
-          }});
-        var exportLabel1=ui.Label('1) Navigate to the Tasks tab in the top right hand panel - both newDebris and previous year debrisExtent will be available to download');
-        var exportLabel2=ui.Label('2) Click run to download them - you will be given the option to rename the file and choose a save location on your Google Drive');
-        var okButton=ui.Button('OK');
-        exportDataPanel.add(exportLabel);
-        exportDataPanel.add(exportLabel1);
-        exportDataPanel.add(exportLabel2);
-        exportDataPanel.add(okButton);
-        Map.add(exportDataPanel);
+        
+          // newDebris raster to vector conversion
+          var newDebris_export = newDebris.reduceToVectors({
+            geometry: geometry,
+            scale: 30,
+            geometryType: 'polygon',
+            maxPixels: 1e15,
+            bestEffort: true,
+            tileScale: 8
+          });
+
+          // Exports new debris to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
+          Export.table.toDrive({
+            collection: newDebris_export,
+            description: ['newDebris']+['_']+startDate+['-']+endDate,
+            fileFormat: 'GeoJSON',
+            folder: 'EarthEngine'
+          });
+
+          // newDebris raster to vector conversion
+          var debrisExtent_export = debrisExtent.reduceToVectors({
+            geometry: geometry,
+            scale: 30,
+            geometryType: 'polygon',
+            maxPixels: 1e15,
+            bestEffort: true,
+            tileScale: 8
+          });
+
+          // Exports new debris to tasks (PRESS RUN IN TASKS TAB TO DOWNLOAD TO DRIVE)
+          Export.table.toDrive({
+            collection: debrisExtent_export,
+            description: ['debrisExtent']+['_']+startDate+['-']+endDate,
+            fileFormat: 'GeoJSON',
+            folder: 'EarthEngine'
+          });
+        
+          Map.remove(exportButton);
+          var exportDataPanel=ui.Panel({
+            style: {
+            position: 'top-center'}
+            });
+          var exportLabel=ui.Label({value: 'IMPORTANT: TO EXPORT YOUR DATA EXECUTE THE FOLLOWING PROCESS',
+          style: {
+            fontSize: '16px',
+            fontWeight: 'bold'
+            }});
+          var exportLabel1=ui.Label('1) Navigate to the Tasks tab in the top right hand panel - both newDebris and previous year debrisExtent will be available to download');
+          var exportLabel2=ui.Label('2) Click run to download them - you will be given the option to rename the file and choose a save location on your Google Drive');
+          var okButton=ui.Button('OK');
+          exportDataPanel.add(exportLabel);
+          exportDataPanel.add(exportLabel1);
+          exportDataPanel.add(exportLabel2);
+          exportDataPanel.add(okButton);
+          Map.add(exportDataPanel);
         
 
-        okButton.onClick(function(){
-        Map.remove(exportDataPanel);
-        });
-        });
+          okButton.onClick(function(){
+            Map.remove(exportDataPanel);
+            });
+          });
         
         
         });
