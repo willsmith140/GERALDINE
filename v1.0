@@ -218,9 +218,9 @@ welcomeNewProject.onClick(function() {
           
         ////////////////////////////                  MASKS                       \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
-          ///////////// RGI clip ////////////////
+          ///////////// Clip to user ROI and RGI ////////////////
           var clip = (function(image) { 
-            return image.clip(ee.FeatureCollection("users/willsmith140/rgi60_all")); 
+            return image.clip(geometry).clip(ee.FeatureCollection("users/willsmith140/rgi60_all")); 
           });
         
           ///////////// Cloud mask //////////////
@@ -558,15 +558,13 @@ welcomeNewProject.onClick(function() {
 
         // Mask debrisCollection and get maximum debris extent (debris represented as 0 in binary raster)
         var debrisExtent = debrisCollection.select('Snow').min();
-        // Clip debrisExtent to ROI
-        var debrisExtent_clip = debrisExtent.clip(geometry);
 
         // Add maximum debris and snow extent layers
-        Map.addLayer(debrisExtent_clip, {}, "Previous year max debris coverage");
+        Map.addLayer(debrisExtent, {}, "Previous year max debris coverage");
 
         /* Mask collection (acquired from user specified date range), get max debris extent and subtract from previous year
         max debris extent to determine debris additions onto clean snow/ice */
-        var newDebris = debrisExtent.subtract(collection.select('Snow').min()).selfMask().clip(geometry);
+        var newDebris = debrisExtent.subtract(collection.select('Snow').min()).selfMask();
         Map.addLayer(newDebris, {palette: ['red']}, "New debris additions");
 
 ///////////////////////////////////////           EXPORT FUNCTION           //////////////////////////////////////
@@ -597,7 +595,7 @@ welcomeNewProject.onClick(function() {
         });
 
         // newDebris raster to vector conversion
-        var debrisExtent_export = debrisExtent_clip.reduceToVectors({
+        var debrisExtent_export = debrisExtent.reduceToVectors({
           geometry: geometry,
           scale: 30,
           geometryType: 'polygon',
