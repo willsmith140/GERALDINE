@@ -216,7 +216,94 @@ welcomeNewProject.onClick(function() {
           var startDate=startDateBox.getValue();
           var endDate=endDateBox.getValue();
           
+        ////////////////////////////                  MASKS                       \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+          ///////////// RGI clip ////////////////
+          var clip = (function(image) { 
+            return image.clip(ee.FeatureCollection("users/willsmith140/rgi60_all")); 
+          });
         
+          ///////////// Cloud mask //////////////
+          var cloudMask = (function(image){
+            // Calculates simple cloud score on image
+            var cloud = ee.Algorithms.Landsat.simpleCloudScore(image);
+            // Create a mask from the cloud score, which highlights all pixels with cloud confidence >80%
+            var cloud_20 = cloud.select(['cloud']).lte(20);
+           // Masks original image with clouds (i.e. removes all identified cloud from image)
+            return image.updateMask(cloud_20);
+          });
+          
+
+          ///////////// NDWI MASK ///////////////
+          // Add NDWI mask to L457 collection
+          var ndwiMask_L457 = (function(image) {
+            // Apply NDWI to image
+            var ndwi = image.normalizedDifference(['B2', 'B4']).rename('NDWI');
+            // Select all pixels >0.4 
+            var waterPixels = ndwi.select('NDWI').lte(0.4);
+            // Masks original image with water (i.e. removes all identified water from image)
+            return image.updateMask(waterPixels);
+          });
+        
+          // Add NDWI mask to L8 collection
+          var ndwiMask_L8 = (function(image) {
+            // Apply NDWI to image
+            var ndwi = image.normalizedDifference(['B3', 'B5']).rename('NDWI');
+            // Select all pixels >0.4 
+            var waterPixels = ndwi.select('NDWI').lte(0.4);
+            // Masks original image with water (i.e. removes all identified water from image)
+            return image.updateMask(waterPixels);
+          });
+
+          ///////////// NDSI ////////////////////
+          // Add NDSI to L457 collection to delineate snow/ice from supraglacial debris
+          var addNDSI_L457 = (function(image) {
+            // Calculates NDSI on Landsat image
+            var ndsi = image.normalizedDifference(['B2', 'B5']).rename('NDSI');
+            // Selects all snow pixels and assigns them value of 1 for binary mask
+            var snowPixels = ndsi.select('NDSI').gte(0.4).rename('Snow');
+            // Adds NDSI band and snow pixel yes/no (1/0) band
+            return image.addBands(ndsi).addBands(snowPixels);
+          });
+          
+          // Add NDSI to L8 collection to delineate snow/ice from supraglacial debris
+          var addNDSI_L8 = (function(image) {
+            // Calculates NDSI on Landsat image
+            var ndsi = image.normalizedDifference(['B3', 'B6']).rename('NDSI');
+            // Selects all snow pixels and assigns them value of 1 for binary mask
+            var snowPixels = ndsi.select('NDSI').gte(0.4).rename('Snow');
+            // Adds NDSI band and snow pixel yes/no (1/0) band
+            return image.addBands(ndsi).addBands(snowPixels);
+          });
+
+          /////////////////////////////////////              MASK FUNCTION                \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+          // Create function which will apply all masks and NDSI to L457 image
+          var masked_L457 = (function(image){
+            // Clip images in collection to RGI outlines
+            var clipped = clip(image);
+            // Apply cloud mask to image
+            var cloud = cloudMask(clipped);
+            // Apply NDWI mask
+            var water = ndwiMask_L457(cloud);
+            // Perform NDSI on masked image
+            var snow = addNDSI_L457(water);
+          return snow;
+          });
+          
+          // Create function which will apply all masks and NDSI to L8 image
+          var masked_L8 = (function(image){
+            // Clip images in collection to RGI outlines
+            var clipped = clip(image);
+            // Apply cloud mask to image
+            var cloud = cloudMask(clipped);
+            // Apply NDWI mask
+            var water = ndwiMask_L8(cloud);
+            // Perform NDSI on masked image
+            var snow = addNDSI_L8(water);
+          return snow;
+          });
+
+
         /////////////////////////////////         FUNCTIONS / METHOD        \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         
         // Function to get all tier 2 Landsat images
@@ -225,22 +312,26 @@ welcomeNewProject.onClick(function() {
               var L4_T2 = ee.ImageCollection('LANDSAT/LT04/C01/T2_TOA')
                 .filterDate(startDate, endDate).sort("system:time_start")
                 .filterBounds(geometry)
-                .filter(ee.Filter.lt("WRS_ROW", 220)); // Exclude all ascending node images (images occasionally collected during night)
+                .filter(ee.Filter.lt("WRS_ROW", 220))
+                .map(masked_L457); // Exclude all ascending node images (images occasionally collected during night)
 
               var L5_T2 = ee.ImageCollection('LANDSAT/LT05/C01/T2_TOA')
                 .filterDate(startDate, endDate).sort("system:time_start")
                 .filterBounds(geometry)
-                .filter(ee.Filter.lt("WRS_ROW", 220));
+                .filter(ee.Filter.lt("WRS_ROW", 220))
+                .map(masked_L457);
 
               var L7_T2 = ee.ImageCollection('LANDSAT/LE07/C01/T2_TOA')
                 .filterDate(startDate, endDate).sort("system:time_start")
                 .filterBounds(geometry)
-                .filter(ee.Filter.lt("WRS_ROW", 220));
+                .filter(ee.Filter.lt("WRS_ROW", 220))
+                .map(masked_L457);
   
               var L8_T2 = ee.ImageCollection('LANDSAT/LC08/C01/T2_TOA')
                 .filterDate(startDate, endDate).sort("system:time_start")
                 .filterBounds(geometry)
-                .filter(ee.Filter.lt("WRS_ROW", 220));
+                .filter(ee.Filter.lt("WRS_ROW", 220))
+                .map(masked_L8);
                 
               return L4_T2.merge(L5_T2).merge(L7_T2).merge(L8_T2);
         };
@@ -260,13 +351,15 @@ welcomeNewProject.onClick(function() {
               var L7_RT = ee.ImageCollection('LANDSAT/LE07/C01/T1_RT_TOA')
                 .filterDate(startDate_RT_L7, endDate).sort("system:time_start")
                 .filterBounds(geometry)
-                .filter(ee.Filter.lt("WRS_ROW", 220));
+                .filter(ee.Filter.lt("WRS_ROW", 220))
+                .map(masked_L457);
 
               // Get Landsat 8 real time images
               var L8_RT = ee.ImageCollection('LANDSAT/LC08/C01/T1_RT_TOA')
                 .filterDate(startDate_RT_L8, endDate).sort("system:time_start")
                 .filterBounds(geometry)
-                .filter(ee.Filter.lt("WRS_ROW", 220));
+                .filter(ee.Filter.lt("WRS_ROW", 220))
+                .map(masked_L8);
                 
               return L7_RT.merge(L8_RT);
             }
@@ -285,22 +378,26 @@ welcomeNewProject.onClick(function() {
             var L4 = ee.ImageCollection('LANDSAT/LT04/C01/T1_TOA')
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
-              .filter(ee.Filter.lt("WRS_ROW", 220)); // Exclude all ascending node images (images occasionally collected during night)
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L457); // Exclude all ascending node images (images occasionally collected during night)
 
             var L5 = ee.ImageCollection('LANDSAT/LT05/C01/T1_TOA')
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
-              .filter(ee.Filter.lt("WRS_ROW", 220));
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L457);
 
             var L7 = ee.ImageCollection('LANDSAT/LE07/C01/T1_TOA')
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
-              .filter(ee.Filter.lt("WRS_ROW", 220));
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L457);
   
             var L8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA')
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
-              .filter(ee.Filter.lt("WRS_ROW", 220));
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L8);
               
               
             if(T2check.getValue() === true && RTcheck.getValue() === false){
@@ -394,75 +491,6 @@ welcomeNewProject.onClick(function() {
 
           print("Images used to identify new debris additions", collection);
         
-          ////////////////////////////                  MASKS                       \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
-          // RGI clip
-          var clip = (function(image) { 
-            return image.clip(ee.FeatureCollection("users/willsmith140/rgi60_all")); 
-          });
-        
-          // Cloud mask
-          var cloudMask = (function(image){
-            // Calculates simple cloud score on image
-            var cloud = ee.Algorithms.Landsat.simpleCloudScore(image);
-            // Create a mask from the cloud score, which highlights all pixels with cloud confidence >80%
-            var cloud_20 = cloud.select(['cloud']).lte(20);
-           // Masks original image with clouds (i.e. removes all identified cloud from image)
-            return image.updateMask(cloud_20);
-          });
-        
-          // Add NDWI mask to collection
-          var ndwiMask = (function(image) {
-            // Apply NDWI to image
-            var ndwi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
-                          image.normalizedDifference(['B3', 'B5']).rename('NDWI'), 
-                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_7")),
-                          image.normalizedDifference(['B2', 'B4']).rename('NDWI'),
-                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_5")),
-                          image.normalizedDifference(['B2', 'B4']).rename('NDWI'),
-                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_4")),
-                          image.normalizedDifference(['B2', 'B4']).rename('NDWI'),
-                          null)))));
-
-            // Select all pixels >0.4 
-            var waterPixels = ndwi.select('NDWI').lte(0.4);
-            // Masks original image with water (i.e. removes all identified water from image)
-            return image.updateMask(waterPixels);
-          });
-
-          // Add NDSI to collection to delineate snow/ice from supraglacial debris
-          var addNDSI = (function(image) {
-            // Calculates NDSI on Landsat image
-            var ndsi = ee.Image(ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_8")), 
-                          image.normalizedDifference(['B3', 'B6']).rename('NDSI'), 
-                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_7")),
-                          image.normalizedDifference(['B2', 'B5']).rename('NDSI'),
-                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_5")),
-                          image.normalizedDifference(['B2', 'B5']).rename('NDSI'),
-                          ee.Algorithms.If(ee.Algorithms.IsEqual(image.get("SPACECRAFT_ID"), ("LANDSAT_4")),
-                          image.normalizedDifference(['B2', 'B5']).rename('NDSI'),
-                          null)))));
-                          
-            // Selects all snow pixels and assigns them value of 1 for binary mask
-            var snowPixels = ndsi.select('NDSI').gte(0.4).rename('Snow');
-            // Adds NDSI band and snow pixel yes/no (1/0) band
-            return image.addBands(ndsi).addBands(snowPixels);
-          });
-
-/////////////////////////////////////              MASK FUNCTION                \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-          // Create function which will apply all masks and NDSI to single image
-          var masked = (function(image){
-            // Clip images in collection to RGI outlines
-            var clipped = clip(image);
-            // Apply cloud mask to image
-            var cloud = cloudMask(clipped);
-            // Apply NDWI mask
-            var water = ndwiMask(cloud);
-            // Perform NDSI on masked image
-            var snow = addNDSI(water);
-          return snow;
-          });
-        
 /////////////////////////////////////       Debris extent identification        ////////////////////////////////
 
           // Get all Landsat images from year before user specified date range
@@ -472,22 +500,26 @@ welcomeNewProject.onClick(function() {
             var L4 = ee.ImageCollection('LANDSAT/LT04/C01/T1_TOA')
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
-              .filter(ee.Filter.lt("WRS_ROW", 220)); // Exclude all ascending node images (images occasionally collected during night)
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L457); // Exclude all ascending node images (images occasionally collected during night)
 
             var L5 = ee.ImageCollection('LANDSAT/LT05/C01/T1_TOA')
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
-              .filter(ee.Filter.lt("WRS_ROW", 220));
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L457);
 
             var L7 = ee.ImageCollection('LANDSAT/LE07/C01/T1_TOA')
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
-              .filter(ee.Filter.lt("WRS_ROW", 220));
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L457);
   
             var L8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_TOA')
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
-              .filter(ee.Filter.lt("WRS_ROW", 220));
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L8);
               
               
             if(T2check.getValue() === true){
@@ -522,10 +554,10 @@ welcomeNewProject.onClick(function() {
 
         // Load Landsat 8 data, filter by date and bounds for previous year debris cover extent
         var debrisCollection = getDebrisExtentCollection(debrisDates.start(), debrisDates.end(), geometry);
-        print("Images used to determine previous year max debris coverage", debrisCollection.getInfo());
+        print("Images used to determine previous year max debris coverage", debrisCollection);
 
         // Mask debrisCollection and get maximum debris extent (debris represented as 0 in binary raster)
-        var debrisExtent = debrisCollection.map(masked).select('Snow').min();
+        var debrisExtent = debrisCollection.select('Snow').min();
         // Clip debrisExtent to ROI
         var debrisExtent_clip = debrisExtent.clip(geometry);
 
@@ -534,7 +566,7 @@ welcomeNewProject.onClick(function() {
 
         /* Mask collection (acquired from user specified date range), get max debris extent and subtract from previous year
         max debris extent to determine debris additions onto clean snow/ice */
-        var newDebris = debrisExtent.subtract(collection.map(masked).select('Snow').min()).selfMask().clip(geometry);
+        var newDebris = debrisExtent.subtract(collection.select('Snow').min()).selfMask().clip(geometry);
         Map.addLayer(newDebris, {palette: ['red']}, "New debris additions");
 
 ///////////////////////////////////////           EXPORT FUNCTION           //////////////////////////////////////
