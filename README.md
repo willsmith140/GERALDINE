@@ -2,6 +2,6 @@
 
 GERALDINE is an open-access resource that enables detection and characterisation of debris deposition onto glaciers, allowing spatial and temporal evaluation in a changing climate.
 
-Latest tool link (v1.0): https://code.earthengine.google.com/ddf241179e0f1da81fe0086410a6b169
+Latest tool link (v1.0): https://code.earthengine.google.com/ddf241179e0f1da81fe0086410a6b169?hideCode=true
 
 Citation: Smith, W.D., Dunning, S.A., Ross, N., Telling, J. and Brough, S. (In Review) 'GERALDINE (Google earth Engine supRaglAciaL Debris INput dEtector) - A new Tool for Identifying and Monitoring Supraglacial Landslide Inputs', Earth Surface Dynamics
