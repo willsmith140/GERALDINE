@@ -36,13 +36,13 @@ var welcomeSubtitle1=ui.Label({value:'Version: 1.0',
         textAlign: 'center',
         fontSize: '14px',
         }});
-var welcomeSubtitle2=ui.Label({value:'If used please cite: Smith et al. (2019) GERALDINE: A new Tool for Identifying and Monitoring Supraglacial Debris Inputs',
+var welcomeSubtitle2=ui.Label({value:'If used please read and cite: Smith et al. (2020) GERALDINE: A new Tool for Identifying and Monitoring Supraglacial Debris Inputs',
       style: {
         margin: '1px 10px 1px 10px',
         textAlign: 'center',
         fontSize: '12px',
         fontWeight: 'bold'
-        }}).setUrl('https://www.earth-surf-dynam.net/');
+        }}).setUrl('https://esurf.copernicus.org/preprints/esurf-2020-40/');
 
 var welcomeNewProject=ui.Button('New Project');
 welcomePanel.add(welcomeTitle);
@@ -234,28 +234,6 @@ welcomeNewProject.onClick(function() {
            // Masks original image with clouds (i.e. removes all identified cloud from image)
             return image.updateMask(cloud_20);
           });
-          
-
-          ///////////// NDWI MASK ///////////////
-          // Add NDWI mask to L457 collection
-          var ndwiMask_L457 = (function(image) {
-            // Apply NDWI to image
-            var ndwi = image.normalizedDifference(['B2', 'B4']).rename('NDWI');
-            // Select all pixels >0.4 
-            var waterPixels = ndwi.select('NDWI').lte(0.4);
-            // Masks original image with water (i.e. removes all identified water from image)
-            return image.updateMask(waterPixels);
-          });
-        
-          // Add NDWI mask to L8 collection
-          var ndwiMask_L8 = (function(image) {
-            // Apply NDWI to image
-            var ndwi = image.normalizedDifference(['B3', 'B5']).rename('NDWI');
-            // Select all pixels >0.4 
-            var waterPixels = ndwi.select('NDWI').lte(0.4);
-            // Masks original image with water (i.e. removes all identified water from image)
-            return image.updateMask(waterPixels);
-          });
 
           ///////////// NDSI ////////////////////
           // Add NDSI to L457 collection to delineate snow/ice from supraglacial debris
@@ -285,10 +263,8 @@ welcomeNewProject.onClick(function() {
             var clipped = clip(image);
             // Apply cloud mask to image
             var cloud = cloudMask(clipped);
-            // Apply NDWI mask
-            var water = ndwiMask_L457(cloud);
             // Perform NDSI on masked image
-            var snow = addNDSI_L457(water);
+            var snow = addNDSI_L457(cloud);
           return snow;
           });
           
@@ -298,10 +274,8 @@ welcomeNewProject.onClick(function() {
             var clipped = clip(image);
             // Apply cloud mask to image
             var cloud = cloudMask(clipped);
-            // Apply NDWI mask
-            var water = ndwiMask_L8(cloud);
             // Perform NDSI on masked image
-            var snow = addNDSI_L8(water);
+            var snow = addNDSI_L8(cloud);
           return snow;
           });
 
