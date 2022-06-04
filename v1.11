@@ -1,4 +1,4 @@
-// GERALDINE (Google earth Engine supRaglAciaL Debris INput dEtector) v1.0
+// GERALDINE (Google earth Engine supRaglAciaL Debris INput dEtector) v1.11
 // Written by Will Smith - Newcastle University
 // w.d.smith2@newcastle.ac.uk
 
@@ -30,7 +30,7 @@ var welcomeSubtitle=ui.Label({value:'Written by Will Smith, Newcastle University
         textAlign: 'center',
         fontSize: '14px'
         }});
-var welcomeSubtitle1=ui.Label({value:'Version: 1.0',
+var welcomeSubtitle1=ui.Label({value:'Version: 1.11',
       style: {
         margin: '1px 10px 1px 10px',
         textAlign: 'center',
@@ -247,7 +247,7 @@ welcomeNewProject.onClick(function() {
           });
           
           // Add NDSI to L8 collection to delineate snow/ice from supraglacial debris
-          var addNDSI_L8 = (function(image) {
+          var addNDSI_L89 = (function(image) {
             // Calculates NDSI on Landsat image
             var ndsi = image.normalizedDifference(['B3', 'B6']).rename('NDSI');
             // Selects all snow pixels and assigns them value of 1 for binary mask
@@ -269,13 +269,13 @@ welcomeNewProject.onClick(function() {
           });
           
           // Create function which will apply all masks and NDSI to L8 image
-          var masked_L8 = (function(image){
+          var masked_L89 = (function(image){
             // Clip images in collection to RGI outlines
             var clipped = clip(image);
             // Apply cloud mask to image
             var cloud = cloudMask(clipped);
             // Perform NDSI on masked image
-            var snow = addNDSI_L8(cloud);
+            var snow = addNDSI_L89(cloud);
           return snow;
           });
 
@@ -307,9 +307,15 @@ welcomeNewProject.onClick(function() {
                 .filterDate(startDate, endDate).sort("system:time_start")
                 .filterBounds(geometry)
                 .filter(ee.Filter.lt("WRS_ROW", 220))
-                .map(masked_L8);
+                .map(masked_L89);
                 
-              return L4_T2.merge(L5_T2).merge(L7_T2).merge(L8_T2);
+              var L9_T2 = ee.ImageCollection('LANDSAT/LC09/C02/T2_TOA')
+                .filterDate(startDate, endDate).sort("system:time_start")
+                .filterBounds(geometry)
+                .filter(ee.Filter.lt("WRS_ROW", 220))
+                .map(masked_L89);
+                
+              return L4_T2.merge(L5_T2).merge(L7_T2).merge(L8_T2).merge(L9_T2);
         };
         
         // Function to all all real time Landsat images from last 16 days
@@ -335,7 +341,7 @@ welcomeNewProject.onClick(function() {
                 .filterDate(startDate_RT_L8, endDate).sort("system:time_start")
                 .filterBounds(geometry)
                 .filter(ee.Filter.lt("WRS_ROW", 220))
-                .map(masked_L8);
+                .map(masked_L89);
                 
               return L7_RT.merge(L8_RT);
             }
@@ -373,7 +379,13 @@ welcomeNewProject.onClick(function() {
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
               .filter(ee.Filter.lt("WRS_ROW", 220))
-              .map(masked_L8);
+              .map(masked_L89);
+            
+            var L9 = ee.ImageCollection('LANDSAT/LC09/C02/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L89);
               
               
             if(T2check.getValue() === true && RTcheck.getValue() === false){
@@ -381,7 +393,7 @@ welcomeNewProject.onClick(function() {
               // Get all Landsat tier 2 images from specified date range
               var T2_images = T2_collection(startDate, endDate, geometry);
                 
-              return L4.merge(L5).merge(L7).merge(L8).merge(T2_images);
+              return L4.merge(L5).merge(L7).merge(L8).merge(L9).merge(T2_images);
               
             }
             
@@ -390,7 +402,7 @@ welcomeNewProject.onClick(function() {
               // Get all Landsat real time images from the previous 16 days if user has specified end date as todays date
               var RT_images = RT_collection(endDate, geometry);
               
-              return L4.merge(L5).merge(L7).merge(L8).merge(RT_images);
+              return L4.merge(L5).merge(L7).merge(L8).merge(L9).merge(RT_images);
             }
             
             // Check if user has entered todays date as end date - if they haven't then real time images are not utilised and warning shows
@@ -415,7 +427,7 @@ welcomeNewProject.onClick(function() {
               
               Map.add(RTwarning);
               
-              return L4.merge(L5).merge(L7).merge(L8);
+              return L4.merge(L5).merge(L7).merge(L8).merge(L9);
             }
             
             // Check if user has entered todays date as end date - if they haven't then real time images are not utilised and warning shows
@@ -442,7 +454,7 @@ welcomeNewProject.onClick(function() {
               
               var T2_images = T2_collection(startDate, endDate, geometry);
               
-              return L4.merge(L5).merge(L7).merge(L8).merge(T2_images);
+              return L4.merge(L5).merge(L7).merge(L8).merge(L9).merge(T2_images);
             }
 
             
@@ -450,11 +462,11 @@ welcomeNewProject.onClick(function() {
               var T2_images = T2_collection(startDate, endDate, geometry);
               var RT_images = RT_collection(endDate, geometry);
               
-              return L4.merge(L5).merge(L7).merge(L8).merge(T2_images).merge(RT_images);
+              return L4.merge(L5).merge(L7).merge(L8).merge(L9).merge(T2_images).merge(RT_images);
             }
             
             else{
-              return L4.merge(L5).merge(L7).merge(L8);
+              return L4.merge(L5).merge(L7).merge(L8).merge(L9);
             }
 
           };
@@ -495,7 +507,13 @@ welcomeNewProject.onClick(function() {
               .filterDate(startDate, endDate).sort("system:time_start")
               .filterBounds(geometry)
               .filter(ee.Filter.lt("WRS_ROW", 220))
-              .map(masked_L8);
+              .map(masked_L89);
+              
+            var L9 = ee.ImageCollection('LANDSAT/LC09/C02/T1_TOA')
+              .filterDate(startDate, endDate).sort("system:time_start")
+              .filterBounds(geometry)
+              .filter(ee.Filter.lt("WRS_ROW", 220))
+              .map(masked_L89);
               
               
             if(T2check.getValue() === true){
@@ -503,13 +521,13 @@ welcomeNewProject.onClick(function() {
               // Get all Landsat tier 2 images from year before user specified date range
               var T2_images = T2_collection(startDate, endDate, geometry);
                 
-              return L4.merge(L5).merge(L7).merge(L8).merge(T2_images);
+              return L4.merge(L5).merge(L7).merge(L8).merge(L9).merge(T2_images);
               
             }
             
             // Only return Tier 1 images if Tier 2 imagery box has not been checked
             else{
-              return L4.merge(L5).merge(L7).merge(L8);
+              return L4.merge(L5).merge(L7).merge(L8).merge(L9);
             }
 
           };
